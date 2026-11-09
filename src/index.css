@@ -1,0 +1,169 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import '@fontsource-variable/newsreader';
+
+@theme {
+  --font-sans: 'Geist Variable', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --font-serif: 'Newsreader Variable', Georgia, serif;
+
+  /* One neutral ramp. Cool graphite so the node colours carry all the hue. */
+  --color-side: #0a0b0d;
+  --color-bg: #0e0f12;
+  --color-card: #14161a;
+  --color-raised: #1c1f24;
+  --color-hover: #22262c;
+  --color-line: rgb(236 236 238 / 0.08);
+  --color-line-strong: rgb(236 236 238 / 0.16);
+  --color-ink: #ececee;
+  --color-ink2: #a2a5ad;
+  --color-ink3: #868a94;
+  --color-chalk: #efeae0;
+
+  /* Epidemic states. Each colour means one thing everywhere: nodes, charts, legends. */
+  --color-s: #4cc38a;
+  --color-i: #e5484d;
+  --color-r: #5b9cf6;
+  --color-iso: #f59e42;
+  --color-new: #a78bfa;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* In the base layer so Tailwind utilities (text size, colour) still win. */
+@layer base {
+  button,
+  input,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-chalk);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: rgb(239 234 224 / 0.25);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Range inputs: hairline track, chalk thumb. */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--color-ink2) 0,
+    var(--color-ink2) var(--fill, 0%),
+    var(--color-line-strong) var(--fill, 0%),
+    var(--color-line-strong) 100%
+  );
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--color-chalk);
+  border: 0;
+  box-shadow: 0 0 0 3px var(--color-card);
+  transition: transform 150ms var(--ease-out-soft);
+}
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(0.94);
+}
+input[type='range']::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-line-strong);
+}
+input[type='range']::-moz-range-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-ink2);
+}
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-chalk);
+  border: 0;
+  box-shadow: 0 0 0 3px var(--color-card);
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* One entrance per page: a short fade and rise. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 400ms var(--ease-out-soft) both;
+}
+.rise-2 {
+  animation: rise 400ms var(--ease-out-soft) 60ms both;
+}
+.rise-3 {
+  animation: rise 400ms var(--ease-out-soft) 120ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .rise-2,
+  .rise-3 {
+    animation: none;
+  }
+}
+
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
+/* Scrollbars stay quiet. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(236 236 238 / 0.18) transparent;
+}
