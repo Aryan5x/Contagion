@@ -1,5 +1,6 @@
 import type { Simulation } from './epidemicModel'
 import { I } from './types'
+import { detectionActive } from './interventionEngine'
 
 /**
  * Data behind the plain-language commentary. Everything here is read from the simulation's own state and
@@ -14,6 +15,8 @@ export interface DayReport {
   newInfections: Array<{ source: number; target: number }>
   recoveries: number[]
   isolatedToday: number[]
+  /** Traced contacts whose quarantine starts today. */
+  quarantinedToday: number[]
   infectedNow: number
   infectedBefore: number | null
   peakInfected: number
@@ -33,6 +36,7 @@ export function infectiousNeighboursAtStart(sim: Simulation, v: number, day: num
   const d0 = day - 1
   const g = sim.graph
   const iso = sim.config.interventions.isolation
+  const detecting = detectionActive(sim.config.interventions)
   const dist = sim.config.interventions.distancing
   let k = 0
   for (let i = 0; i < g.adjNodes[v].length; i++) {
@@ -41,7 +45,8 @@ export function infectiousNeighboursAtStart(sim: Simulation, v: number, day: num
     if (sim.infectionDay[u] === -1 || sim.infectionDay[u] > d0) continue
     if (sim.recoveryDay[u] !== -1 && sim.recoveryDay[u] <= d0) continue
     const id = sim.isolationDay[u]
-    if (iso.enabled && id !== -1 && id <= d0 && d0 < id + iso.duration) continue
+    if (detecting && id !== -1 && id <= d0 && d0 < id + iso.duration) continue
+    if (sim.quarantineFrom[u] !== -1 && sim.quarantineFrom[u] <= d0 && d0 < sim.quarantineUntil[u]) continue
     if (dist.enabled && d0 >= dist.startDay && sim.edgeDistanced[e]) continue
     k++
   }
@@ -65,9 +70,11 @@ export function explainDay(sim: Simulation): DayReport {
   const newInfections = day > 0 ? sim.eventsOnDay(day).map((e) => ({ source: e.source, target: e.target })) : []
   const recoveries: number[] = []
   const isolatedToday: number[] = []
+  const quarantinedToday: number[] = []
   for (let v = 0; v < sim.graph.n; v++) {
     if (day > 0 && sim.recoveryDay[v] === day) recoveries.push(v)
     if (sim.isolationDay[v] === day) isolatedToday.push(v)
+    if (sim.quarantineFrom[v] === day) quarantinedToday.push(v)
   }
 
   let phase: Phase
@@ -101,6 +108,7 @@ export function explainDay(sim: Simulation): DayReport {
     newInfections,
     recoveries,
     isolatedToday,
+    quarantinedToday,
     infectedNow: now.I,
     infectedBefore: before ? before.I : null,
     peakInfected,

@@ -6,7 +6,10 @@ import {
   PRESET_SCENARIOS,
   runScenarios,
   scenarioId,
+  configSlug,
+  curvesCSV,
   scenarioName,
+  variantsCSV,
 } from '../engine'
 import type { InterventionKey, ScenarioResult, ScenarioSpec } from '../engine'
 import { useWorkspace } from '../state/workspace'
@@ -14,6 +17,8 @@ import { AttackBars, CurvesChart, SeriesLegend } from '../components/charts'
 import { NetworkCanvas } from '../components/NetworkCanvas'
 import { Btn, PageHeader, Panel, SliderField, cx, fmtNum, fmtPct } from '../components/ui'
 import { SERIES } from '../theme'
+import { ExportPanel } from '../components/ExportPanel'
+import { downloadText } from '../components/download'
 
 export function Comparison() {
   const w = useWorkspace()
@@ -174,6 +179,13 @@ export function Comparison() {
             <>
               <TakeAway results={ordered} n={graph.n} />
               <ResultsTable results={ordered} runs={data.runs} n={graph.n} />
+              <ExportPanel
+                items={[
+                  { label: 'Results table', title: 'CSV: mean and standard deviation of every statistic per scenario, with the reduction versus the baseline', run: () => downloadText(variantsCSV(ordered), `breaking-the-chain_${configSlug(ordered[0].config)}_comparison_runs${data.runs}.csv`) },
+                  { label: 'Daily curves', title: 'CSV: mean susceptible, infected and removed per day for each scenario', run: () => downloadText(curvesCSV(ordered), `breaking-the-chain_${configSlug(ordered[0].config)}_comparison-curves_runs${data.runs}.csv`) },
+                ]}
+                note={stale ? 'These are the results shown above, from before the settings changed. Run the comparison again to export the new settings.' : `${data.runs} runs per scenario on the same network and seed.`}
+              />
               <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
                 <Panel title="Infected over time" aside={<span>mean of {data.runs} run{data.runs > 1 ? 's' : ''}</span>}>
                   <CurvesChart variants={curves} bands={data.runs > 1} height={300} maxDay={120} />
@@ -229,7 +241,7 @@ const shortLabel = (r: ScenarioResult) =>
   r.keys.length === 0
     ? 'No intervention'
     : r.keys
-        .map((k) => ({ randomVax: 'Random vax', targetedVax: 'Targeted vax', distancing: 'Distancing', isolation: 'Isolation' })[k])
+        .map((k) => ({ randomVax: 'Random vax', targetedVax: 'Targeted vax', distancing: 'Distancing', isolation: 'Isolation', tracing: 'Tracing' })[k])
         .join(' + ')
 
 function ResultsTable({ results, runs, n }: { results: ScenarioResult[]; runs: number; n: number }) {
@@ -270,6 +282,9 @@ function ResultsTable({ results, runs, n }: { results: ScenarioResult[]; runs: n
                   {r.keys.includes('randomVax') || r.keys.includes('targetedVax') ? (
                     <span className="ml-2 font-mono text-[12px] text-ink3">{fmtNum(r.stats.vaccinated.mean)} vaccinated</span>
                   ) : null}
+                  {r.keys.includes('tracing') ? (
+                    <span className="ml-2 font-mono text-[12px] text-ink3">{fmtNum(r.stats.quarantined.mean)} quarantined</span>
+                  ) : null}
                 </td>
                 <td className="px-2 py-2.5 text-right text-ink">{pm(r.stats.cumulative)}</td>
                 <td className="px-2 py-2.5 text-right text-ink2">{pm(r.stats.peak)}</td>
@@ -301,21 +316,19 @@ function ResultsTable({ results, runs, n }: { results: ScenarioResult[]; runs: n
 /** Replays replicate 0 of every scenario on the same graph, one small network per scenario. */
 function Replay({ results, positions }: { results: ScenarioResult[]; positions: Float32Array }) {
   const maxDay = Math.max(...results.map((r) => r.reference.frames.length - 1))
-  const [day, setDay] = useState(Math.min(8, maxDay))
+  const [chosenDay, setDay] = useState(8)
+  // A new comparison can end sooner than the previous one, so the stored day is clamped on every render.
+  const day = Math.min(chosenDay, maxDay)
   const [playing, setPlaying] = useState(false)
   useEffect(() => {
     if (!playing) return
-    const id = window.setInterval(() => {
-      setDay((d) => {
-        if (d >= maxDay) {
-          setPlaying(false)
-          return d
-        }
-        return d + 1
-      })
-    }, 350)
+    const id = window.setInterval(() => setDay((d) => Math.min(d, maxDay) + 1), 350)
     return () => window.clearInterval(id)
   }, [playing, maxDay])
+  // Stop at the last day. Kept out of the setDay updater, which must stay pure.
+  useEffect(() => {
+    if (playing && day >= maxDay) setPlaying(false)
+  }, [playing, day, maxDay])
 
   return (
     <Panel
@@ -345,7 +358,7 @@ function Replay({ results, positions }: { results: ScenarioResult[]; positions: 
           }}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {results.map((r) => {
           const d = Math.min(day, r.reference.frames.length - 1)
           const h = r.reference.history[d]

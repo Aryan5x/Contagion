@@ -296,7 +296,7 @@ describe('interventions', () => {
     const c = cfg({ beta: 0.12 }, 'ba', 21)
     const g = generateGraph(c.network)
     const res = (await runScenarios(g, c, DEFAULT_INTERVENTIONS, PRESET_SCENARIOS, 4))!
-    expect(res.length).toBe(5)
+    expect(res.length).toBe(PRESET_SCENARIOS.length)
     const base = res.find((r) => r.id === 'none')!
     for (const r of res) {
       expect(r.reference.initialInfected).toEqual(base.reference.initialInfected)
@@ -311,7 +311,7 @@ describe('interventions', () => {
   })
 
   it('invariants hold across many random configurations', () => {
-    const keysets: InterventionKey[][] = [[], ['randomVax'], ['targetedVax'], ['distancing'], ['isolation'], ['targetedVax', 'distancing', 'isolation']]
+    const keysets: InterventionKey[][] = [[], ['randomVax'], ['targetedVax'], ['distancing'], ['isolation'], ['targetedVax', 'distancing', 'isolation'], ['tracing'], ['distancing', 'isolation', 'tracing']]
     let i = 0
     for (const type of ['er', 'ws', 'ba'] as NetworkType[]) {
       for (const keys of keysets) {
@@ -319,5 +319,18 @@ describe('interventions', () => {
         expect(checkInvariants(sim)).toEqual([])
       }
     }
+  })
+})
+
+describe('epidemic threshold', () => {
+  it('thresholdBeta gives exactly R0 = 1, and null when no beta <= 1 can start an outbreak', async () => {
+    const { thresholdBeta, estimateR0 } = await import('../src/engine')
+    for (const [gamma, excess] of [[0.2, 6], [0.12, 9.5], [0.5, 2]] as const) {
+      const b = thresholdBeta(gamma, excess)!
+      expect(b).toBeGreaterThan(0)
+      expect(estimateR0(b, gamma, { excessDegree: excess })).toBeCloseTo(1, 10)
+    }
+    expect(thresholdBeta(0.2, 0.5)).toBeNull() // too sparse: T would have to exceed 1
+    expect(thresholdBeta(0.2, 0)).toBeNull()
   })
 })

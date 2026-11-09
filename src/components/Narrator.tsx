@@ -114,6 +114,13 @@ export function StoryPanel({
       points.push(
         <>
           {plural(r.isolatedToday.length, 'person was', 'people were')} detected and isolated. Their contacts (dashed orange) are switched off for {iv.isolation.duration} days, so the chain cannot pass through them.
+          {iv.tracing.enabled && ` Contact tracing then searches their contacts up to ${plural(iv.tracing.depth, 'step')} away.`}
+        </>,
+      )
+    if (r.quarantinedToday.length > 0)
+      points.push(
+        <>
+          {plural(r.quarantinedToday.length, 'traced contact starts', 'traced contacts start')} quarantine today for {iv.tracing.duration} days (dashed teal ring). People in quarantine can neither catch the infection nor pass it on, even before anyone knows they were exposed.
         </>,
       )
     if (iv.distancing.enabled && sim.distancingActive)

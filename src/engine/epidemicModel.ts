@@ -3,9 +3,11 @@ import { CODE, I, R, S } from './types'
 import { Rng, hashSeed } from './randomGenerator'
 import { attemptTransmissions, drawRecoveries } from './transmissionEngine'
 import {
+  detectionActive,
   selectDistancedEdges,
   selectRandomVaccination,
   selectTargetedVaccination,
+  traceContacts,
   updateIsolation,
 } from './interventionEngine'
 
@@ -27,7 +29,9 @@ export interface SimulationOptions {
  *   1. every infectious, non-isolated vertex tries each active edge to a susceptible neighbour (Bernoulli beta);
  *   2. every infectious vertex recovers with probability gamma;
  *   3. both sets of changes are committed together, so new infections start transmitting only at day d+1 -> d+2;
- *   4. isolation (detection after a delay) is evaluated on the new state.
+ *   4. isolation (detection after a delay) is evaluated on the new state;
+ *   5. with contact tracing on, each newly detected case is traced breadth-first and the contacts found
+ *      are quarantined (see traceContacts).
  */
 export class Simulation {
   readonly graph: Graph
@@ -44,6 +48,9 @@ export class Simulation {
   readonly isolatedUntil: Int32Array
   readonly isolationDay: Int32Array
   readonly edgeDistanced: Uint8Array
+  /** Quarantine window per vertex: in quarantine during steps starting on days from .. until - 1. -1 if never traced. */
+  readonly quarantineFrom: Int32Array
+  readonly quarantineUntil: Int32Array
   readonly initialInfected: number[]
 
   readonly history: StepRecord[] = []
@@ -58,6 +65,8 @@ export class Simulation {
   private distancedCount = 0
   private readonly rng: Rng
   private readonly isoRng: Rng
+  private readonly traceRng: Rng
+  private everQuarantinedCount = 0
   private readonly recordFrames: boolean
 
   constructor(graph: Graph, config: SimConfig, opts: SimulationOptions = {}) {
@@ -76,6 +85,8 @@ export class Simulation {
     this.isolatedUntil = new Int32Array(n).fill(-1)
     this.isolationDay = new Int32Array(n).fill(-1)
     this.edgeDistanced = new Uint8Array(graph.edges.length)
+    this.quarantineFrom = new Int32Array(n).fill(-1)
+    this.quarantineUntil = new Int32Array(n).fill(-1)
 
     const base = config.network.seed
     // Independent streams: the initial infected set depends only on the base seed, so every scenario
@@ -107,13 +118,15 @@ export class Simulation {
 
     this.rng = new Rng(hashSeed(base, 'sim', this.replicate))
     this.isoRng = new Rng(hashSeed(base, 'iso', this.replicate))
+    // A separate stream, so switching tracing on never changes any other random draw.
+    this.traceRng = new Rng(hashSeed(base, 'trace', this.replicate))
 
     this.cI = this.initialInfected.length
     this.cR = this.vaccinatedCount
     this.cS = n - this.cI - this.cR
     this.cumulative = this.cI
-    // Isolation can already apply at day 0 when the detection delay is 0.
-    updateIsolation(this, iv.isolation, 0, this.isoRng)
+    // Isolation (and tracing) can already apply at day 0 when the detection delay is 0.
+    this.detect(0)
     this.record(0)
   }
 
@@ -138,6 +151,19 @@ export class Simulation {
   isIsolated(v: number): boolean {
     return this.status[v] === I && this.isolatedUntil[v] > this.day
   }
+  /** In quarantine for the step that starts today. */
+  isQuarantined(v: number): boolean {
+    return this.quarantineFrom[v] !== -1 && this.quarantineFrom[v] <= this.day && this.day < this.quarantineUntil[v]
+  }
+  /** Number of people ever placed in quarantine by contact tracing (counted once per quarantine). */
+  get everQuarantined(): number {
+    return this.everQuarantinedCount
+  }
+  get currentlyQuarantined(): number {
+    let c = 0
+    for (let v = 0; v < this.graph.n; v++) if (this.isQuarantined(v)) c++
+    return c
+  }
   /** Number of everyone who has ever been isolated. */
   get everIsolated(): number {
     let c = 0
@@ -155,9 +181,9 @@ export class Simulation {
     const out = new Uint8Array(this.graph.n)
     for (let v = 0; v < this.graph.n; v++) {
       if (this.vaccinated[v]) out[v] = CODE.VACCINATED
-      else if (this.status[v] === S) out[v] = CODE.S
       else if (this.status[v] === R) out[v] = CODE.R
-      else if (this.isolatedUntil[v] > this.day) out[v] = CODE.ISOLATED
+      else if (this.status[v] === S) out[v] = this.isQuarantined(v) ? CODE.QUARANTINED : CODE.S
+      else if (this.isolatedUntil[v] > this.day || this.isQuarantined(v)) out[v] = CODE.ISOLATED
       else if (this.day > 0 && this.infectionDay[v] === this.day) out[v] = CODE.NEW
       else out[v] = CODE.I
     }
@@ -178,6 +204,8 @@ export class Simulation {
       vaccinated: this.vaccinated[v] === 1,
       isolated: this.isIsolated(v),
       isolationDay: this.isolationDay[v] === -1 ? null : this.isolationDay[v],
+      quarantined: this.isQuarantined(v),
+      quarantineDay: this.quarantineFrom[v] === -1 ? null : this.quarantineFrom[v],
     }
   }
 
@@ -210,6 +238,8 @@ export class Simulation {
         isolatedUntil: this.isolatedUntil,
         edgeDistanced: this.edgeDistanced,
         distancingActive: this.distancingActive,
+        quarantineFrom: this.quarantineFrom,
+        quarantineUntil: this.quarantineUntil,
         day: d0,
         beta: config.beta,
         rng: this.rng,
@@ -237,9 +267,21 @@ export class Simulation {
     this.cumulative += events.length
     this.day = d1
 
-    updateIsolation(this, config.interventions.isolation, d1, this.isoRng)
+    this.detect(d1)
     this.record(events.length)
     return true
+  }
+
+  /** End-of-day detection: isolate newly detected cases, then trace their contacts if tracing is on. */
+  private detect(day: number) {
+    const iv = this.config.interventions
+    const found = updateIsolation(this, iv.isolation, day, this.isoRng, detectionActive(iv))
+    if (!iv.tracing.enabled) return
+    // Distancing in force for the step that starts today decides which contacts exist.
+    const distancing = iv.distancing.enabled && day >= iv.distancing.startDay
+    for (const v of found) {
+      this.everQuarantinedCount += traceContacts(this.graph, this, iv.tracing, v, day, distancing, this.traceRng).length
+    }
   }
 
   /** Runs until the epidemic dies out (or maxDays). */
@@ -257,6 +299,7 @@ export class Simulation {
       newInfections,
       cumulative: this.cumulative,
       isolated: this.currentlyIsolated,
+      quarantined: this.currentlyQuarantined,
       recovered: this.cR - this.vaccinatedCount,
     })
     if (this.recordFrames) this.frames.push(this.displayCodes())

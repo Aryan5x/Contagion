@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
-import { NETWORK_LABEL, NETWORK_SHORT, connectedComponents, degreeCentrality, estimateR0, generateGraph, graphStats, rankByDegree } from '../engine'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { NETWORK_LABEL, NETWORK_SHORT, configSlug, connectedComponents, edgeListCSV, degreeCentrality, estimateR0, generateGraph, graphStats, rankByDegree } from '../engine'
 import type { NetworkType } from '../engine'
 import { useWorkspace } from '../state/workspace'
 import { NetworkCanvas } from '../components/NetworkCanvas'
 import { DegreeChart } from '../components/charts'
 import { Btn, NumberField, PageHeader, Panel, Segmented, SliderField, Stat, fmtNum } from '../components/ui'
-import { SERIES } from '../theme'
+import { COLORS, SERIES } from '../theme'
+import { ExportPanel } from '../components/ExportPanel'
+import { downloadCanvasPNG, downloadText } from '../components/download'
 import { Shuffle } from 'lucide-react'
 
 const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t)
@@ -18,6 +20,7 @@ export function NetworkExplorer() {
   const [mode, setMode] = useState<'degree' | 'components'>('degree')
   const [logScale, setLogScale] = useState(false)
   const [selected, setSelected] = useState<number | null>(null)
+  const canvasWrap = useRef<HTMLDivElement>(null)
   useEffect(() => setSelected(null), [graph])
 
   const codes = useMemo(() => new Uint8Array(graph.n), [graph])
@@ -61,7 +64,7 @@ export function NetworkExplorer() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
-          <div className="rise-2 relative overflow-hidden rounded-2xl border border-line">
+          <div ref={canvasWrap} className="rise-2 relative overflow-hidden rounded-2xl border border-line">
             <NetworkCanvas
               className="h-[480px] sm:h-[560px]"
               graph={graph}
@@ -244,6 +247,14 @@ export function NetworkExplorer() {
             </table>
             <p className="mt-2 text-[12px] leading-4 text-ink3">Click an ID to highlight its contacts on the network.</p>
           </Panel>
+
+          <ExportPanel
+            items={[
+              { label: 'Edge list', title: 'CSV: every edge {u, v} of the graph with both degrees', run: () => downloadText(edgeListCSV(graph), `breaking-the-chain_${configSlug(config)}_edges.csv`) },
+              { label: 'Network image', title: `PNG of the network, coloured ${mode === 'degree' ? 'by degree' : 'by component'}`, run: () => downloadCanvasPNG(canvasWrap.current, `breaking-the-chain_${configSlug(config)}_${mode}.png`, COLORS.canvas) },
+            ]}
+            note="The edge list can be loaded into a spreadsheet or a graph tool such as Gephi or NetworkX."
+          />
         </aside>
       </div>
     </div>

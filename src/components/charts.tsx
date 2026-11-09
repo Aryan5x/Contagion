@@ -66,7 +66,8 @@ export function SirChart({
   height?: number
   baseline?: readonly StepRecord[] | null
 }) {
-  const len = Math.min(160, Math.max(history.length, baseline?.length ?? 0))
+  // Every simulated day is plotted: long epidemics (slow recovery) can run up to maxDays.
+  const len = Math.max(history.length, baseline?.length ?? 0)
   const data = Array.from({ length: len }, (_, d) => {
     const h = history[d]
     return {

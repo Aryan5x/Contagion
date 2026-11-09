@@ -259,3 +259,18 @@ export function transmissibility(beta: number, gamma: number): number {
 export function estimateR0(beta: number, gamma: number, stats: Pick<GraphStats, 'excessDegree'>): number {
   return transmissibility(beta, gamma) * stats.excessDegree
 }
+
+/**
+ * Smallest transmission probability beta that puts the network above the epidemic threshold (R0 = 1)
+ * for a given recovery probability gamma. Solves T(beta) = 1 / excess with T = beta / (beta + gamma - beta*gamma):
+ * beta_c = T_c * gamma / (1 - T_c * (1 - gamma)). Returns null when no beta <= 1 reaches the threshold
+ * (a graph too sparse for any outbreak, or gamma too high).
+ */
+export function thresholdBeta(gamma: number, excessDegree: number): number | null {
+  if (!(excessDegree > 0)) return null
+  const tc = 1 / excessDegree
+  const denom = 1 - tc * (1 - gamma)
+  if (denom <= 0) return null
+  const b = (tc * gamma) / denom
+  return b > 0 && b <= 1 ? b : null
+}

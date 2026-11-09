@@ -7,6 +7,7 @@ export const COLORS = {
   R: '#5b9cf6',
   ISO: '#f59e42',
   NEW: '#a78bfa',
+  Q: '#2dd4bf',
   ink: '#ececee',
   ink2: '#a2a5ad',
   ink3: '#868a94',
@@ -22,6 +23,7 @@ export const CODE_COLOR: Record<number, string> = {
   [CODE.ISOLATED]: COLORS.ISO,
   [CODE.NEW]: COLORS.NEW,
   [CODE.VACCINATED]: COLORS.R,
+  [CODE.QUARANTINED]: COLORS.S,
 }
 
 export const CODE_LABEL: Record<number, string> = {
@@ -31,6 +33,7 @@ export const CODE_LABEL: Record<number, string> = {
   [CODE.ISOLATED]: 'Isolated',
   [CODE.NEW]: 'Newly infected',
   [CODE.VACCINATED]: 'Vaccinated',
+  [CODE.QUARANTINED]: 'In quarantine',
 }
 
 /** Series colours for comparing scenarios or variants: one lead colour, then quiet steps. */

@@ -14,6 +14,7 @@ export interface RunSummary {
   uninfected: number
   vaccinated: number
   isolated: number
+  quarantined: number
   duration: number
 }
 
@@ -32,6 +33,7 @@ export interface AggregateStats {
   uninfected: Agg
   vaccinated: Agg
   isolated: Agg
+  quarantined: Agg
   duration: Agg
   /** Share of runs in which more than 10% of the population was infected. */
   majorOutbreakPct: number
@@ -66,6 +68,7 @@ export function summarizeRun(sim: Simulation): RunSummary {
     uninfected: m.uninfected,
     vaccinated: m.vaccinated,
     isolated: m.totalIsolated,
+    quarantined: m.totalQuarantined,
     duration: sim.day,
   }
 }
@@ -84,6 +87,7 @@ export function aggregateRuns(runs: RunSummary[]): AggregateStats {
     uninfected: pick('uninfected'),
     vaccinated: pick('vaccinated'),
     isolated: pick('isolated'),
+    quarantined: pick('quarantined'),
     duration: pick('duration'),
     majorOutbreakPct: runs.length ? (100 * runs.filter((r) => r.attackRate > 0.1).length) / runs.length : 0,
   }
@@ -171,6 +175,7 @@ export const PRESET_SCENARIOS: ScenarioSpec[] = [
   { id: 'targeted', keys: ['targetedVax'] },
   { id: 'distancing', keys: ['distancing'] },
   { id: 'isolation', keys: ['isolation'] },
+  { id: 'tracing', keys: ['tracing'] },
 ]
 
 export const scenarioId = (keys: readonly InterventionKey[]) =>

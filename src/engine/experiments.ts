@@ -1,7 +1,7 @@
 import type { NetworkType, SimConfig } from './types'
 import { DEFAULT_INTERVENTIONS, withEnabled } from './interventionEngine'
 import type { VariantResult, VariantSpec } from './experimentRunner'
-import { estimateR0, generateGraph, graphStats, transmissibility } from './index'
+import { estimateR0, generateGraph, graphStats, thresholdBeta, transmissibility } from './index'
 
 export interface ExperimentSettings {
   n: number
@@ -197,17 +197,19 @@ export const EXPERIMENTS: ExperimentDef[] = [
       const g = generateGraph(res[0].config.network)
       const st = graphStats(g)
       // Threshold: T_c = <k>/(<k^2> - <k>) = 1/excessDegree ; solve beta/(beta+gamma-beta*gamma) = T_c for beta.
-      const gam = 0.2
+      const gam = res[0].config.gamma
       const tc = st.excessDegree > 0 ? 1 / st.excessDegree : 1
-      const betaC = (tc * gam) / (1 - tc * (1 - gam))
+      const betaC = thresholdBeta(gam, st.excessDegree)
+      const last = res[res.length - 1]
+      const mid = Math.floor(res.length / 2)
       const ar = res.map((r) => r.stats.attackRate.mean)
       return {
         interpretation: [
-          `Epidemic threshold: an outbreak is possible when R₀ = T·(⟨k²⟩ − ⟨k⟩)/⟨k⟩ > 1. For this graph (⟨k⟩ = ${st.avgDegree.toFixed(2)}, ⟨k²⟩ = ${st.secondMoment.toFixed(1)}) that requires T > ${tc.toFixed(3)}, which with γ = ${gam} corresponds to β ≳ ${betaC.toFixed(3)}.`,
+          `Epidemic threshold: an outbreak is possible when R₀ = T·(⟨k²⟩ − ⟨k⟩)/⟨k⟩ > 1. For this graph (⟨k⟩ = ${st.avgDegree.toFixed(2)}, ⟨k²⟩ = ${st.secondMoment.toFixed(1)}) that requires T > ${tc.toFixed(3)}, ${betaC === null ? `which no β up to 1 reaches with γ = ${gam}: this graph is too sparse for a large outbreak.` : `which with γ = ${gam} corresponds to β ≳ ${betaC.toFixed(3)}.`}`,
           `Below that value the mean attack rate stays near ${pct(ar[0])}–${pct(ar[2])}; above it infections increase steeply and then saturate toward the size of the connected component (${pct(st.largestComponent / s.n)} of the population).`,
           `Measured mean attack rate: ${res.map((r, i) => `β=${(r.config.beta).toFixed(2)}: ${pct(ar[i])}`).join(', ')}.`,
         ],
-        conclusion: `Cumulative infection is not proportional to β. Mean attack rate was ${pct(ar[0])} at β = ${res[0].config.beta.toFixed(2)}, ${pct(ar[Math.floor(ar.length / 2)])} at β = ${res[Math.floor(ar.length / 2)].config.beta.toFixed(2)} and ${pct(ar[ar.length - 1])} at β = 0.20. The calculated threshold β ≈ ${betaC.toFixed(3)} marks where the curve leaves the near-zero region.`,
+        conclusion: `Cumulative infection is not proportional to β. Mean attack rate was ${pct(ar[0])} at β = ${res[0].config.beta.toFixed(2)}, ${pct(ar[mid])} at β = ${res[mid].config.beta.toFixed(2)} and ${pct(ar[ar.length - 1])} at β = ${last.config.beta.toFixed(2)}. ${betaC === null ? 'This graph never crosses the epidemic threshold, so the curve stays near zero.' : `The calculated threshold β ≈ ${betaC.toFixed(3)} marks where the curve leaves the near-zero region.`}`,
       }
     },
   },

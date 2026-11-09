@@ -1,5 +1,5 @@
 import type { Graph, InterventionConfig, InterventionKey } from './types'
-import { I } from './types'
+import { I, R } from './types'
 import { rankByDegree } from './graphAnalysis'
 import type { Rng } from './randomGenerator'
 
@@ -8,16 +8,18 @@ export const DEFAULT_INTERVENTIONS: InterventionConfig = {
   targetedVax: { enabled: false, pct: 15 },
   distancing: { enabled: false, pct: 40, startDay: 0 },
   isolation: { enabled: false, delay: 2, duration: 7, detectProb: 0.8 },
+  tracing: { enabled: false, depth: 1, coverage: 0.7, delay: 1, duration: 14 },
 }
 
 export const INTERVENTION_LABEL: Record<InterventionKey, string> = {
   randomVax: 'Random vaccination',
   targetedVax: 'Targeted vaccination',
   distancing: 'Social distancing',
-  isolation: 'Isolation and quarantine',
+  isolation: 'Isolation of detected cases',
+  tracing: 'Contact tracing',
 }
 
-export const INTERVENTION_KEYS: InterventionKey[] = ['randomVax', 'targetedVax', 'distancing', 'isolation']
+export const INTERVENTION_KEYS: InterventionKey[] = ['randomVax', 'targetedVax', 'distancing', 'isolation', 'tracing']
 
 /** Copy of `base` where exactly the interventions in `enabled` are switched on (parameters are kept). */
 export function withEnabled(base: InterventionConfig, enabled: readonly InterventionKey[]): InterventionConfig {
@@ -27,7 +29,13 @@ export function withEnabled(base: InterventionConfig, enabled: readonly Interven
     targetedVax: { ...base.targetedVax, enabled: on.has('targetedVax') },
     distancing: { ...base.distancing, enabled: on.has('distancing') },
     isolation: { ...base.isolation, enabled: on.has('isolation') },
+    tracing: { ...base.tracing, enabled: on.has('tracing') },
   }
+}
+
+/** Cases are detected (and isolated) when isolation is on, and also when contact tracing is on: tracing starts from detected cases. */
+export function detectionActive(cfg: InterventionConfig): boolean {
+  return cfg.isolation.enabled || cfg.tracing.enabled
 }
 
 export function enabledKeys(cfg: InterventionConfig): InterventionKey[] {
@@ -81,9 +89,10 @@ export function updateIsolation(
   cfg: InterventionConfig['isolation'],
   day: number,
   rng: Rng,
+  active = cfg.enabled,
 ): number[] {
   const out: number[] = []
-  if (!cfg.enabled) return out
+  if (!active) return out
   for (let v = 0; v < state.status.length; v++) {
     if (state.status[v] !== I || state.isolationDay[v] !== -1) continue
     if (day - state.infectionDay[v] < cfg.delay) continue
@@ -92,6 +101,62 @@ export function updateIsolation(
       state.isolatedUntil[v] = day + cfg.duration
       out.push(v)
     }
+  }
+  return out
+}
+
+export interface TracingState {
+  status: Uint8Array
+  vaccinated: Uint8Array
+  edgeDistanced: Uint8Array
+  quarantineFrom: Int32Array
+  quarantineUntil: Int32Array
+}
+
+/**
+ * Contact tracing from one detected case, at the end of day `day`.
+ *
+ * Breadth-first search over the contact graph from `index`, at most `depth` hops. Each edge to an
+ * unvisited neighbour is followed (the contact is found) with probability `coverage`; a contact that
+ * is not found is not traced onwards, so coverage compounds with depth. Edges switched off by active
+ * distancing are not contacts and are never followed. Everyone found who is still susceptible or
+ * infected, and not already quarantined, is quarantined for steps starting on days
+ * day + delay .. day + delay + duration - 1. Returns the people newly quarantined, in BFS order.
+ */
+export function traceContacts(
+  g: Graph,
+  state: TracingState,
+  cfg: InterventionConfig['tracing'],
+  index: number,
+  day: number,
+  distancingActive: boolean,
+  rng: Rng,
+): number[] {
+  const out: number[] = []
+  const from = day + cfg.delay
+  const until = from + cfg.duration
+  const seen = new Set<number>([index])
+  let frontier = [index]
+  for (let hop = 0; hop < cfg.depth && frontier.length; hop++) {
+    const next: number[] = []
+    for (const u of frontier) {
+      const nodes = g.adjNodes[u]
+      const edges = g.adjEdges[u]
+      for (let i = 0; i < nodes.length; i++) {
+        const v = nodes[i]
+        if (seen.has(v)) continue
+        if (distancingActive && state.edgeDistanced[edges[i]]) continue
+        if (!rng.chance(cfg.coverage)) continue
+        seen.add(v)
+        next.push(v)
+        if (state.vaccinated[v] || state.status[v] === R) continue
+        if (state.quarantineUntil[v] > day) continue // already in, or waiting for, a quarantine
+        state.quarantineFrom[v] = from
+        state.quarantineUntil[v] = until
+        out.push(v)
+      }
+    }
+    frontier = next
   }
   return out
 }

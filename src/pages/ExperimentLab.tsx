@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FlaskConical } from 'lucide-react'
-import { graphStats, runVariants } from '../engine'
+import { curvesCSV, graphStats, runVariants, thresholdBeta, variantsCSV } from '../engine'
 import type { VariantResult } from '../engine'
 import { DEFAULT_EXPERIMENT_SETTINGS, EXPERIMENTS } from '../engine/experiments'
 import type { ExperimentDef, ExperimentId, ExperimentSettings } from '../engine/experiments'
@@ -8,6 +8,8 @@ import { useWorkspace } from '../state/workspace'
 import { AttackBars, CurvesChart, SeriesLegend, XYBand } from '../components/charts'
 import { Btn, NumberField, Panel, SliderField, cx, fmtNum, fmtPct } from '../components/ui'
 import { SERIES } from '../theme'
+import { ExportPanel } from '../components/ExportPanel'
+import { downloadText } from '../components/download'
 
 export function ExperimentLab() {
   const w = useWorkspace()
@@ -131,16 +133,16 @@ function Results({ def, settings, results }: { def: ExperimentDef; settings: Exp
   const text = useMemo(() => def.interpret(results, used), [def, results, used])
   const specs = useMemo(() => def.build(used), [def, used])
 
+  const fileBase = `breaking-the-chain_experiment-${def.id}_n${used.n}_seed${used.seed}_runs${used.runs}`
   const isSweep = def.xLabel !== undefined
   const curveVariants = isSweep ? [3, 5, 7, 9].map((i) => results[i]).filter(Boolean) : results
 
-  const thresholdBeta = useMemo(() => {
-    if (def.id !== 'transmission') return undefined
-    const st = graphStats(results[0].graph)
-    const gam = results[0].config.gamma
-    const tc = st.excessDegree > 0 ? 1 / st.excessDegree : 1
-    return (tc * gam) / (1 - tc * (1 - gam))
+  const betaC = useMemo(() => {
+    if (def.id !== 'transmission') return null
+    return thresholdBeta(results[0].config.gamma, graphStats(results[0].graph).excessDegree)
   }, [def.id, results])
+  // Draw the threshold only when it falls inside the swept range of β.
+  const sweepMax = specs.length ? Math.max(...specs.map((sp) => sp.x ?? 0)) : 0
 
   return (
     <>
@@ -163,7 +165,7 @@ function Results({ def, settings, results }: { def: ExperimentDef; settings: Exp
               points={results.map((r, i) => ({ x: specs[i]?.x ?? i, mean: r.stats.attackRate.mean, sd: r.stats.attackRate.sd }))}
               xLabel={def.xLabel!}
               height={300}
-              threshold={thresholdBeta && thresholdBeta < 0.2 ? thresholdBeta : undefined}
+              threshold={betaC !== null && betaC < sweepMax ? betaC : undefined}
             />
           ) : (
             <AttackBars items={results.map((r) => ({ label: r.label, mean: r.stats.attackRate.mean, sd: r.stats.attackRate.sd }))} height={300} />
@@ -213,6 +215,14 @@ function Results({ def, settings, results }: { def: ExperimentDef; settings: Exp
           <p className="mt-4 text-[12px] leading-4 text-ink3">Written from the numbers above, so it changes with the settings. This is an educational model, not a clinical prediction.</p>
         </Panel>
       </div>
+
+      <ExportPanel
+        items={[
+          { label: 'Results table', title: 'CSV: mean and standard deviation of every statistic for each variant', run: () => downloadText(variantsCSV(results), `${fileBase}_results.csv`) },
+          { label: 'Daily curves', title: 'CSV: mean susceptible, infected and removed per day for each variant', run: () => downloadText(curvesCSV(results), `${fileBase}_curves.csv`) },
+        ]}
+        note={`${used.runs} runs per variant, population ${used.n}, seed ${used.seed}.`}
+      />
     </>
   )
 }

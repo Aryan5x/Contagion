@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pause, Play, RotateCcw, Shuffle, StepForward } from 'lucide-react'
 import type { RouteId } from '../App'
-import { INTERVENTION_LABEL, NETWORK_LABEL, checkInvariants, enabledKeys } from '../engine'
+import { INTERVENTION_LABEL, NETWORK_LABEL, checkInvariants, configSlug, enabledKeys, historyCSV, parametersCSV, transmissionsCSV } from '../engine'
 import type { NetworkType } from '../engine'
 import { SPEEDS, useWorkspace } from '../state/workspace'
 import { NetworkCanvas } from '../components/NetworkCanvas'
 import { NewInfectionsChart, SirChart } from '../components/charts'
 import { DistributionBar, InvariantLedger, Legend, NodeInspector, nodeTip } from '../components/widgets'
 import { GuideStrip, StoryPanel, Timeline } from '../components/Narrator'
+import { ExportPanel } from '../components/ExportPanel'
+import { downloadCanvasPNG, downloadText } from '../components/download'
+import { COLORS } from '../theme'
 import { Btn, NumberField, PageHeader, Panel, Segmented, SliderField, Stat, Switch, fmtNum, fmtPct } from '../components/ui'
 
 type Tab = 'story' | 'setup' | 'data'
@@ -18,6 +21,7 @@ export function LiveSimulation({ go }: { go: (r: RouteId) => void }) {
   const [selected, setSelected] = useState<number | null>(null)
   const [showTree, setShowTree] = useState(true)
   const [tab, setTab] = useState<Tab>('story')
+  const canvasWrap = useRef<HTMLDivElement>(null)
 
   // A different graph invalidates the selection.
   useEffect(() => setSelected(null), [w.graph])
@@ -47,6 +51,7 @@ export function LiveSimulation({ go }: { go: (r: RouteId) => void }) {
     return () => window.removeEventListener('keydown', on)
   })
 
+  const fileBase = `breaking-the-chain_${configSlug(config)}_day${m.day}`
   const runLabel = w.running ? 'Pause' : m.day === 0 ? 'Start' : 'Resume'
   const net = config.network
   const recent = sim.log.slice(-7).reverse()
@@ -109,7 +114,7 @@ export function LiveSimulation({ go }: { go: (r: RouteId) => void }) {
             </div>
           </div>
 
-          <div className="rise-2 relative overflow-hidden rounded-2xl border border-line">
+          <div ref={canvasWrap} className="rise-2 relative overflow-hidden rounded-2xl border border-line">
             <NetworkCanvas
               className="h-[520px] sm:h-[620px]"
               graph={w.graph}
@@ -151,7 +156,17 @@ export function LiveSimulation({ go }: { go: (r: RouteId) => void }) {
             <Stat label="Peak infected" value={fmtNum(m.peakInfected)} sub={`on day ${m.peakDay}`} />
             <Stat label="Attack rate" value={fmtPct(m.attackRate, 1)} hint="Share of the population that has been infected at any time: cumulative infections / N." />
             <Stat label="Recovered" value={fmtNum(m.recovered)} tone="var(--color-r)" sub={`${fmtNum(m.vaccinated)} vaccinated`} />
-            <Stat label="Isolated" value={fmtNum(m.currentlyIsolated)} tone="var(--color-iso)" sub={`${fmtNum(m.totalIsolated)} in total`} />
+            {config.interventions.tracing.enabled ? (
+              <Stat
+                label="Isolated / quarantined"
+                value={`${fmtNum(m.currentlyIsolated)} / ${fmtNum(m.currentlyQuarantined)}`}
+                tone="var(--color-q)"
+                sub={`${fmtNum(m.totalIsolated)} / ${fmtNum(m.totalQuarantined)} in total`}
+                hint="Isolated: detected cases. Quarantined: people found by contact tracing. Both make no contacts while it lasts."
+              />
+            ) : (
+              <Stat label="Isolated" value={fmtNum(m.currentlyIsolated)} tone="var(--color-iso)" sub={`${fmtNum(m.totalIsolated)} in total`} />
+            )}
             <Stat label="Susceptible" value={fmtNum(m.susceptible)} tone="var(--color-s)" sub="could still catch it" />
             <Stat label="Transmissions" value={fmtNum(sim.log.length)} sub="contacts that carried it" hint="Each transmission is one edge of the contact network that actually carried the infection. Together they form the chain." />
           </div>
@@ -280,6 +295,7 @@ export function LiveSimulation({ go }: { go: (r: RouteId) => void }) {
                         k === 'randomVax' ? `${c.randomVax.pct}% of population` :
                         k === 'targetedVax' ? `top ${c.targetedVax.pct}% by degree` :
                         k === 'distancing' ? `${c.distancing.pct}% of edges off` :
+                        k === 'tracing' ? `${c.tracing.depth} hop${c.tracing.depth > 1 ? 's' : ''}, ${Math.round(c.tracing.coverage * 100)}% found` :
                         `after ${c.isolation.delay} d, for ${c.isolation.duration} d`
                       return (
                         <li key={k} className="flex justify-between gap-3">
@@ -320,6 +336,15 @@ export function LiveSimulation({ go }: { go: (r: RouteId) => void }) {
                   </p>
                 )}
               </Panel>
+              <ExportPanel
+                items={[
+                  { label: 'Daily counts', title: 'CSV: S, I, R, new and cumulative infections, isolated and quarantined, one row per day', run: () => downloadText(historyCSV(sim), `${fileBase}_daily.csv`) },
+                  { label: 'Transmissions', title: 'CSV: who infected whom, on which day and along which edge', run: () => downloadText(transmissionsCSV(sim), `${fileBase}_transmissions.csv`) },
+                  { label: 'Parameters', title: 'CSV: network, β, γ, seed and every intervention setting, to reproduce this run', run: () => downloadText(parametersCSV(config), `${fileBase}_parameters.csv`) },
+                  { label: 'Network image', title: 'PNG of the network as it looks now', run: () => downloadCanvasPNG(canvasWrap.current, `${fileBase}.png`, COLORS.canvas) },
+                ]}
+                note={`Up to day ${m.day}. Files are named after the network and seed, so the same settings reproduce them.`}
+              />
             </div>
           )}
         </aside>
