@@ -1,6 +1,7 @@
 import type { Metrics, StepRecord } from './types'
 import { I, R, S } from './types'
 import type { Simulation } from './epidemicModel'
+import { detectionActive } from './interventionEngine'
 
 export const EARLY_DAYS = 5
 
@@ -42,6 +43,8 @@ export function computeMetrics(sim: Simulation): Metrics {
     attackRate: n ? c.cumulative / n : 0,
     totalIsolated: sim.everIsolated,
     currentlyIsolated: sim.currentlyIsolated,
+    totalQuarantined: sim.everQuarantined,
+    currentlyQuarantined: sim.currentlyQuarantined,
     observedR: done ? doneSecondary / done : null,
     finished: sim.isFinished(),
   }
@@ -110,7 +113,9 @@ export function checkInvariants(sim: Simulation): string[] {
   }
 
   const iso = sim.config.interventions.isolation
+  const detecting = detectionActive(sim.config.interventions)
   const dist = sim.config.interventions.distancing
+  const inQuarantine = (v: number, d: number) => sim.quarantineFrom[v] !== -1 && sim.quarantineFrom[v] <= d && d < sim.quarantineUntil[v]
   const seen = new Set<number>()
   let secondarySum = 0
   for (const e of sim.log) {
@@ -129,8 +134,10 @@ export function checkInvariants(sim: Simulation): string[] {
     if (sim.recoveryDay[e.source] !== -1 && sim.recoveryDay[e.source] <= d0)
       bad.push(`source ${e.source} had already recovered on day ${d0}`)
     const id = sim.isolationDay[e.source]
-    if (iso.enabled && id !== -1 && id <= d0 && d0 < id + iso.duration)
+    if (detecting && id !== -1 && id <= d0 && d0 < id + iso.duration)
       bad.push(`source ${e.source} transmitted while isolated`)
+    if (inQuarantine(e.source, d0)) bad.push(`source ${e.source} transmitted while in quarantine`)
+    if (inQuarantine(e.target, d0)) bad.push(`vertex ${e.target} was infected while in quarantine`)
     secondarySum++
   }
   for (let v = 0; v < n; v++) {

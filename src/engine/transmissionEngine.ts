@@ -12,6 +12,9 @@ export interface TransmissionContext {
   status: Uint8Array
   /** Vertex u is isolated during a step iff isolatedUntil[u] > day (day = state at the start of the step). */
   isolatedUntil: Int32Array
+  /** Vertex u is in quarantine during a step iff quarantineFrom[u] <= day < quarantineUntil[u]. Optional. */
+  quarantineFrom?: Int32Array
+  quarantineUntil?: Int32Array
   /** 1 where an edge has been removed by social distancing. */
   edgeDistanced: Uint8Array
   distancingActive: boolean
@@ -28,19 +31,21 @@ export interface TransmissionContext {
  * with an independent Bernoulli(beta) trial. A susceptible vertex with k infectious neighbours is
  * therefore infected with probability 1 - (1 - beta)^k. Only vertices infectious at the START of the
  * step take part, so nothing infected during this step can transmit during it. The first successful
- * contact is recorded as the transmission source.
+ * contact is recorded as the transmission source. A quarantined vertex makes no contacts at all: it can
+ * neither pass the infection on nor catch it.
  */
 export function attemptTransmissions(ctx: TransmissionContext, infectious: readonly number[]): TransmissionEvent[] {
-  const { graph, status, isolatedUntil, edgeDistanced, distancingActive, day, beta, rng } = ctx
+  const { graph, status, isolatedUntil, edgeDistanced, distancingActive, day, beta, rng, quarantineFrom: qf, quarantineUntil: qu } = ctx
+  const quarantined = (x: number) => !!qf && !!qu && qf[x] <= day && day < qu[x]
   const events: TransmissionEvent[] = []
   const claimed = new Set<number>()
   for (const u of infectious) {
-    if (isolatedUntil[u] > day) continue
+    if (isolatedUntil[u] > day || quarantined(u)) continue
     const nodes = graph.adjNodes[u]
     const edges = graph.adjEdges[u]
     for (let i = 0; i < nodes.length; i++) {
       const v = nodes[i]
-      if (status[v] !== S || claimed.has(v)) continue
+      if (status[v] !== S || claimed.has(v) || quarantined(v)) continue
       if (distancingActive && edgeDistanced[edges[i]]) continue
       if (rng.chance(beta)) {
         claimed.add(v)

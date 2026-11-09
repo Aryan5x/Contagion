@@ -116,6 +116,35 @@ export function Interventions({ go }: { go: (r: RouteId) => void }) {
     return { k, hub: total ? top / total : 0, rnd: graph.n ? k / graph.n : 0 }
   }, [graph, iv.targetedVax.pct])
 
+  // Mean number of people within 1, 2 and 3 hops of a vertex, by breadth-first search from every vertex.
+  const reach = useMemo(() => {
+    const sums = [0, 0, 0]
+    const dist = new Int32Array(graph.n)
+    for (let s = 0; s < graph.n; s++) {
+      dist.fill(-1)
+      dist[s] = 0
+      let frontier = [s]
+      for (let hop = 1; hop <= 3 && frontier.length; hop++) {
+        const next: number[] = []
+        for (const u of frontier)
+          for (const v of graph.adjNodes[u])
+            if (dist[v] === -1) {
+              dist[v] = hop
+              next.push(v)
+            }
+        for (let h = hop; h <= 3; h++) sums[h - 1] += next.length
+        frontier = next
+      }
+    }
+    const n = Math.max(1, graph.n)
+    return { one: sums[0] / n, two: sums[1] / n, three: sums[2] / n }
+  }, [graph])
+
+  // People found per detected case: each hop out is reached only through contacts already found, so the
+  // k-th ring is discounted by coverage^k (an estimate; it ignores contacts reachable by several paths).
+  const rings = [reach.one, reach.two - reach.one, reach.three - reach.two]
+  const expectedReach = rings.slice(0, iv.tracing.depth).reduce((sum, ring, i) => sum + ring * iv.tracing.coverage ** (i + 1), 0)
+
   const anyOn = Object.values(iv).some((c) => c.enabled)
   const rows: Array<[string, string, string]> = [
     ['Individuals in play', fmtNum(before.remaining), fmtNum(after.remaining)],
@@ -131,7 +160,7 @@ export function Interventions({ go }: { go: (r: RouteId) => void }) {
     <div>
       <PageHeader
         title="Interventions"
-        lede="Each intervention edits the contact graph: vaccination removes vertices, distancing removes edges, isolation switches a vertex's edges off for a while. Changes here apply to the live simulation and to the comparison."
+        lede="Each intervention edits the contact graph: vaccination removes vertices, distancing removes edges, isolation switches a vertex's edges off for a while, and contact tracing searches outward from each detected case. Changes here apply to the live simulation and to the comparison."
         actions={
           <>
             <Btn variant="ghost" onClick={() => set(DEFAULT_INTERVENTIONS)} disabled={!anyOn}>
@@ -164,10 +193,34 @@ export function Interventions({ go }: { go: (r: RouteId) => void }) {
             <SliderField label="Starts on day" value={iv.distancing.startDay} min={0} max={30} step={1} onChange={(startDay) => set({ ...iv, distancing: { ...iv.distancing, startDay } })} hint="Day 0 means from the first step. Later values let the outbreak grow first." />
           </Card>
 
-          <Card k="isolation" title="Isolation and quarantine" cfg={iv} on={set} blurb="Infected people are detected after a delay and isolated: all their edges go inactive. After the isolation period they rejoin the network if still infectious; if they have recovered they stay recovered.">
+          <Card k="isolation" title="Isolation of detected cases" cfg={iv} on={set} blurb="Infected people are detected after a delay and isolated: all their edges go inactive. After the isolation period they rejoin the network if still infectious; if they have recovered they stay recovered. Contact tracing uses these detection settings too.">
             <SliderField label="Detection delay" value={iv.isolation.delay} min={0} max={10} step={1} format={(v) => `${v} d`} onChange={(delay) => set({ ...iv, isolation: { ...iv.isolation, delay } })} hint="Days after infection before an individual can be detected." />
             <SliderField label="Isolation period" value={iv.isolation.duration} min={1} max={21} step={1} format={(v) => `${v} d`} onChange={(duration) => set({ ...iv, isolation: { ...iv.isolation, duration } })} />
             <SliderField label="Detection probability per day" value={iv.isolation.detectProb} min={0.1} max={1} step={0.05} format={(v) => v.toFixed(2)} onChange={(detectProb) => set({ ...iv, isolation: { ...iv.isolation, detectProb } })} hint="Once past the delay, chance each day that an infected person is detected. 1.00 means certain detection exactly at the delay." />
+          </Card>
+
+          <Card
+            k="tracing"
+            title="Contact tracing"
+            cfg={iv}
+            on={set}
+            blurb={
+              <>
+                Each detected case is isolated, then its contacts are traced by breadth-first search over the contact graph and put in quarantine. People in quarantine can neither catch nor pass on the infection. Detection uses the delay and probability set under isolation{iv.isolation.enabled ? '' : ', even while that switch is off'}.
+              </>
+            }
+          >
+            <SliderField label="Tracing depth" value={iv.tracing.depth} min={1} max={3} step={1} format={(v) => (v === 1 ? '1 hop' : `${v} hops`)} onChange={(depth) => set({ ...iv, tracing: { ...iv.tracing, depth } })} hint="How many steps out from the detected case the search goes. 1 hop: their direct contacts. 2 hops: also the contacts of those contacts." />
+            <SliderField label="Contacts found" value={iv.tracing.coverage} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(coverage) => set({ ...iv, tracing: { ...iv.tracing, coverage } })} hint="Chance that each contact is found. A contact who is missed is not traced onwards, so at 2 hops only about coverage² of second-step contacts are reached." />
+            <SliderField label="Tracing delay" value={iv.tracing.delay} min={0} max={7} step={1} format={(v) => `${v} d`} onChange={(delay) => set({ ...iv, tracing: { ...iv.tracing, delay } })} hint="Days between detecting a case and its contacts starting quarantine. The infection can keep travelling in the meantime." />
+            <SliderField label="Quarantine period" value={iv.tracing.duration} min={1} max={21} step={1} format={(v) => `${v} d`} onChange={(duration) => set({ ...iv, tracing: { ...iv.tracing, duration } })} />
+            <div className="text-[13px] leading-5 text-ink3 sm:col-span-2">
+              On this network a case has on average{' '}
+              <span className="tnum font-mono text-ink">{reach.one.toFixed(1)}</span> contacts and{' '}
+              <span className="tnum font-mono text-ink">{reach.two.toFixed(1)}</span> people within two hops, so tracing at depth {iv.tracing.depth} would aim to reach about{' '}
+              <span className="tnum font-mono text-ink">{expectedReach.toFixed(1)}</span>{' '}
+              people per detected case.
+            </div>
           </Card>
 
           <p className="text-[13px] leading-5 text-ink3">

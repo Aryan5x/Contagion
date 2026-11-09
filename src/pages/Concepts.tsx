@@ -98,17 +98,13 @@ export function Concepts() {
   const [playing, setPlaying] = useState(false)
   useEffect(() => {
     if (!playing) return
-    const id = window.setInterval(() => {
-      setStepN((s) => {
-        if (s >= trace.order.length) {
-          setPlaying(false)
-          return s
-        }
-        return s + 1
-      })
-    }, 650)
+    const id = window.setInterval(() => setStepN((s) => Math.min(s + 1, trace.order.length)), 650)
     return () => window.clearInterval(id)
   }, [playing, trace])
+  // Stop once every vertex has been visited. Kept out of the setStepN updater, which must stay pure.
+  useEffect(() => {
+    if (playing && stepN >= trace.order.length) setPlaying(false)
+  }, [playing, stepN, trace])
 
   // ---- components ----
   const comps = useMemo(() => connectedComponents(graph), [graph])

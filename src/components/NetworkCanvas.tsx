@@ -4,6 +4,9 @@ import type { Graph } from '../engine'
 import { CODE } from '../engine/types'
 import { CODE_COLOR, COLORS } from '../theme'
 
+/** Isolated and quarantined people make no contacts, so their edges are drawn as inactive. */
+const offline = (code: number) => code === CODE.ISOLATED || code === CODE.QUARANTINED
+
 export interface CanvasProps {
   graph: Graph
   /** Normalised layout positions [x0, y0, x1, y1, ...] in [-1, 1]. */
@@ -110,7 +113,7 @@ export function NetworkCanvas(props: CanvasProps) {
     for (let e = 0; e < g.edges.length; e++) {
       const [u, v] = g.edges[e]
       if (p.distanced?.[e]) continue
-      if (p.codes[u] === CODE.ISOLATED || p.codes[v] === CODE.ISOLATED) continue
+      if (offline(p.codes[u]) || offline(p.codes[v])) continue
       segment(e)
     }
     ctx.stroke()
@@ -124,7 +127,7 @@ export function NetworkCanvas(props: CanvasProps) {
       ctx.stroke()
       ctx.setLineDash([])
     }
-    // Inactive because an endpoint is isolated.
+    // Inactive because an endpoint is isolated (orange) or in quarantine after tracing (teal).
     ctx.setLineDash([3, 3])
     ctx.strokeStyle = 'rgba(245,158,66,0.28)'
     ctx.beginPath()
@@ -132,6 +135,15 @@ export function NetworkCanvas(props: CanvasProps) {
       const [u, v] = g.edges[e]
       if (p.distanced?.[e]) continue
       if (p.codes[u] === CODE.ISOLATED || p.codes[v] === CODE.ISOLATED) segment(e)
+    }
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(45,212,191,0.28)'
+    ctx.beginPath()
+    for (let e = 0; e < g.edges.length; e++) {
+      const [u, v] = g.edges[e]
+      if (p.distanced?.[e]) continue
+      if (p.codes[u] === CODE.ISOLATED || p.codes[v] === CODE.ISOLATED) continue
+      if (p.codes[u] === CODE.QUARANTINED || p.codes[v] === CODE.QUARANTINED) segment(e)
     }
     ctx.stroke()
     ctx.setLineDash([])
@@ -206,6 +218,15 @@ export function NetworkCanvas(props: CanvasProps) {
         ctx.strokeStyle = 'rgba(11,12,15,0.85)'
         ctx.lineWidth = 1
         ctx.stroke()
+        if (code === CODE.QUARANTINED && !p.nodeColors) {
+          ctx.strokeStyle = 'rgba(45,212,191,0.95)'
+          ctx.lineWidth = 1.2
+          ctx.setLineDash([2, 2])
+          ctx.beginPath()
+          ctx.arc(x, y, r + 3, 0, Math.PI * 2)
+          ctx.stroke()
+          ctx.setLineDash([])
+        }
         if (code === CODE.ISOLATED && !p.nodeColors) {
           ctx.strokeStyle = 'rgba(245,158,66,0.9)'
           ctx.lineWidth = 1.2

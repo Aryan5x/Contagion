@@ -13,6 +13,13 @@ function Glyph({ code }: { code: number }) {
           <rect x="2.5" y="2.5" width="9" height="9" rx="2" fill={COLORS.R} stroke={COLORS.chalk} strokeWidth="1.2" />
         </svg>
       )
+    case CODE.QUARANTINED:
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="7" r="3.2" fill={COLORS.S} />
+          <circle cx="7" cy="7" r="5.6" fill="none" stroke={COLORS.Q} strokeWidth="1" strokeDasharray="2 2" />
+        </svg>
+      )
     case CODE.ISOLATED:
       return (
         <svg {...common}>
@@ -38,6 +45,7 @@ const LEGEND: Array<[number, string]> = [
   [CODE.R, 'Recovered'],
   [CODE.VACCINATED, 'Vaccinated'],
   [CODE.ISOLATED, 'Isolated'],
+  [CODE.QUARANTINED, 'In quarantine'],
 ]
 
 export function Legend({ className }: { className?: string }) {
@@ -115,7 +123,13 @@ export function DistributionBar({ m }: { m: Metrics }) {
 }
 
 export function NodeInspector({ node, onClose, extra }: { node: NodeView; onClose?: () => void; extra?: ReactNode }) {
-  const status = node.vaccinated ? 'Vaccinated (immune)' : node.status === 'S' ? 'Susceptible' : node.status === 'I' ? (node.isolated ? 'Infected, isolated' : 'Infected') : 'Recovered'
+  const status = node.vaccinated
+    ? 'Vaccinated (immune)'
+    : node.status === 'S'
+      ? node.quarantined ? 'Susceptible, in quarantine' : 'Susceptible'
+      : node.status === 'I'
+        ? node.isolated ? 'Infected, isolated' : node.quarantined ? 'Infected, in quarantine' : 'Infected'
+        : 'Recovered'
   const rows: Array<[string, ReactNode]> = [
     ['State', status],
     ['Degree', node.degree],
@@ -126,6 +140,7 @@ export function NodeInspector({ node, onClose, extra }: { node: NodeView; onClos
     ['Secondary infections', node.secondaryInfections],
   ]
   if (node.isolationDay !== null) rows.push(['Isolated on day', node.isolationDay])
+  if (node.quarantineDay !== null) rows.push([node.quarantined ? 'In quarantine since day' : 'Quarantined from day', node.quarantineDay])
   return (
     <div className="w-64 rounded-xl border border-line-strong bg-raised/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
       <div className="flex items-center justify-between">
@@ -150,7 +165,13 @@ export function NodeInspector({ node, onClose, extra }: { node: NodeView; onClos
 }
 
 export function nodeTip(node: NodeView) {
-  const status = node.vaccinated ? 'Vaccinated' : node.status === 'S' ? 'Susceptible' : node.status === 'I' ? (node.isolated ? 'Isolated' : 'Infected') : 'Recovered'
+  const status = node.vaccinated
+    ? 'Vaccinated'
+    : node.status === 'S'
+      ? node.quarantined ? 'In quarantine' : 'Susceptible'
+      : node.status === 'I'
+        ? node.isolated ? 'Isolated' : node.quarantined ? 'Infected, in quarantine' : 'Infected'
+        : 'Recovered'
   return (
     <div>
       <div className="font-medium text-ink">Individual {node.id}</div>

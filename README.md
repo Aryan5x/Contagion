@@ -1,6 +1,6 @@
 # Breaking the Chain
 
-Modelling and controlling epidemic spread through graph theory. An interactive simulator for a Discrete Mathematical Structures project: a stochastic SIR epidemic runs on random, small-world and scale-free contact graphs, and vaccination, distancing and isolation are tested on the same network.
+Modelling and controlling epidemic spread through graph theory. An interactive simulator for a Discrete Mathematical Structures project: a stochastic SIR epidemic runs on random, small-world and scale-free contact graphs, and vaccination, distancing, isolation and contact tracing are tested on the same network. Results can be exported as CSV and PNG.
 
 Everything runs in the browser. There is no backend, no account and no API key.
 
@@ -30,8 +30,8 @@ Requires Node 18 or newer.
 | Overview | Live miniature epidemic on the real engine, plus a result computed on load (random vs targeted vaccination) |
 | Live simulation | Start, pause, resume, step, reset, speed, new network. Animated graph, S/I/R chart, new-infection chart, metrics, transmission log, node inspector |
 | Network explorer | Generate and measure networks: vertices, edges, degrees, density, components, clustering, path length, degree distribution, hubs, side-by-side model table |
-| Interventions | Random and targeted vaccination, social distancing, isolation. Shows the original and the reduced contact graph |
-| Scenario comparison | No intervention, random vaccination, targeted vaccination, distancing, isolation and custom combinations on the same graph and seed, with replay |
+| Interventions | Random and targeted vaccination, social distancing, isolation, contact tracing (breadth-first search from each detected case). Shows the original and the reduced contact graph |
+| Scenario comparison | No intervention, random vaccination, targeted vaccination, distancing, isolation, contact tracing and custom combinations on the same graph and seed, with replay and CSV export |
 | Experiment lab | Five experiments with repeated runs, mean ± sd, interpretation and conclusion generated from the results |
 | Mathematical concepts | Definitions, formulas and epidemic relevance, with interactive adjacency matrix, BFS/DFS visualiser and shortest-path vs actual-infection-route demo |
 | About the project | Algorithms, invariants, assumptions and limitations |
@@ -46,7 +46,8 @@ src/engine/            Pure TypeScript, no React or DOM
   graphGenerator.ts    Erdős–Rényi, Watts–Strogatz, Barabási–Albert
   graphAnalysis.ts     Degrees, density, components, adjacency matrix, centrality, BFS, DFS, shortest path, R0 estimate
   transmissionEngine.ts  One synchronous round of transmission and recovery
-  interventionEngine.ts  Vaccination, distancing and isolation rules
+  interventionEngine.ts  Vaccination, distancing, isolation and contact tracing rules
+  exporters.ts           CSV builders for daily counts, transmissions, parameters, results and edge lists
   epidemicModel.ts     Simulation: the single authoritative state of one scenario
   metricsCalculator.ts Metrics, aggregation, invariant checker
   experimentRunner.ts  Replicates, scenario comparison
@@ -75,6 +76,7 @@ The interface only reads from the engine. Colours on the canvas, chart series, t
 2. Each infectious vertex recovers with probability `γ`.
 3. Both sets of changes are committed together, so a vertex infected today first transmits tomorrow.
 4. Isolation is evaluated on the new state.
+5. With contact tracing on, each newly detected case is traced breadth-first and the contacts found are quarantined.
 
 **Threshold.** An infected vertex with geometric infectious period transmits across a given edge with probability `T = β / (β + γ − βγ)`. On a configuration-model network `R₀ ≈ T (⟨k²⟩ − ⟨k⟩) / ⟨k⟩` (Newman 2002), and an outbreak needs `R₀ > 1`. The app shows this as an estimate computed from the generated graph.
 
@@ -84,10 +86,11 @@ The interface only reads from the engine. Colours on the canvas, chart series, t
 - Targeted vaccination: the eligible vertices with the highest degree, ties broken by id.
 - Social distancing: a uniform random share of edges is deactivated from a chosen day.
 - Isolation: infected vertices are detected after a delay (with a per-day detection probability) and all their edges are deactivated for a set period. Afterwards they rejoin if still infectious; recovered individuals stay recovered.
+- Contact tracing: every detected case (using the isolation detection settings, even when isolation itself is off) is isolated, then a breadth-first search over the active contacts finds people up to `depth` hops away. Each contact is found with probability `coverage`, and only people who were found are traced onwards. Susceptible and infected people found are quarantined from `delay` days after the detection for `duration` days; in quarantine they can neither infect nor be infected.
 
 **Comparison.** `Reduction (%) = (baseline − intervention) / baseline × 100`, reported as 0 when the baseline is 0.
 
-**Reproducibility.** The graph and the initially infected set depend only on the seed. Transmission, vaccination, distancing and isolation use separate streams derived from the seed and the replicate number, so scenarios sharing a seed start from the same population and cases; extra runs vary only the stochastic stream.
+**Reproducibility.** The graph and the initially infected set depend only on the seed. Transmission, vaccination, distancing, isolation and tracing use separate streams derived from the seed and the replicate number, so scenarios sharing a seed start from the same population and cases; extra runs vary only the stochastic stream.
 
 ## Invariants checked by the engine
 
@@ -97,6 +100,7 @@ The live page shows `S + I + R = N` and an "invariants hold" indicator computed 
 - no vertex infected twice; recovered and vaccinated vertices never infected
 - every infection has a logged source that was infectious the previous day, joined by a real edge
 - no transmission over a distanced edge or from an isolated vertex
+- no transmission from or to a vertex in quarantine
 - `β = 0` gives no infections; `γ = 1` clears everyone infected at the start of a step; no edges means no spread
 - generated graphs are simple, adjacency matrices are symmetric with row sums equal to degrees
 - targeted vaccination picks the highest-degree eligible vertices
