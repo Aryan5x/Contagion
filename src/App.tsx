@@ -1,17 +1,45 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Activity, FlaskConical, GitCompareArrows, House, Info, Menu, Network, ShieldPlus, Sigma, X } from 'lucide-react'
 import { WorkspaceProvider, useWorkspace } from './state/workspace'
 import { NETWORK_SHORT } from './engine'
 import { cx } from './components/ui'
 import { Overview } from './pages/Overview'
-import { LiveSimulation } from './pages/LiveSimulation'
-import { NetworkExplorer } from './pages/NetworkExplorer'
-import { Interventions } from './pages/Interventions'
-import { Comparison } from './pages/Comparison'
-import { ExperimentLab } from './pages/ExperimentLab'
-import { Concepts } from './pages/Concepts'
-import { About } from './pages/About'
+
+// Every page except the landing page is its own chunk, fetched when first opened, so the first
+// screen does not wait for the chart library and the other pages. Each loader is kept so the
+// chunks can also be fetched ahead of time (see prefetchPages).
+const loaders = {
+  live: () => import('./pages/LiveSimulation').then((m) => ({ default: m.LiveSimulation })),
+  network: () => import('./pages/NetworkExplorer').then((m) => ({ default: m.NetworkExplorer })),
+  interventions: () => import('./pages/Interventions').then((m) => ({ default: m.Interventions })),
+  comparison: () => import('./pages/Comparison').then((m) => ({ default: m.Comparison })),
+  lab: () => import('./pages/ExperimentLab').then((m) => ({ default: m.ExperimentLab })),
+  concepts: () => import('./pages/Concepts').then((m) => ({ default: m.Concepts })),
+  about: () => import('./pages/About').then((m) => ({ default: m.About })),
+}
+const LiveSimulation = lazy(loaders.live)
+const NetworkExplorer = lazy(loaders.network)
+const Interventions = lazy(loaders.interventions)
+const Comparison = lazy(loaders.comparison)
+const ExperimentLab = lazy(loaders.lab)
+const Concepts = lazy(loaders.concepts)
+const About = lazy(loaders.about)
+
+/** Fetches every page chunk once the browser is idle, so moving between pages stays instant. */
+function prefetchPages() {
+  const run = () => Object.values(loaders).forEach((load) => void load().catch(() => {}))
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 3000 })
+  else setTimeout(run, 1500)
+}
+
+function PageLoading() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-[13px] text-ink3" role="status">
+      Loading…
+    </div>
+  )
+}
 
 export type RouteId = 'overview' | 'live' | 'network' | 'interventions' | 'comparison' | 'lab' | 'concepts' | 'about'
 
@@ -117,6 +145,7 @@ function Sidebar({ route, go, onNavigate }: { route: RouteId; go: (r: RouteId) =
 function Shell() {
   const [route, go] = useRoute()
   const [open, setOpen] = useState(false)
+  useEffect(prefetchPages, [])
   useEffect(() => {
     window.scrollTo({ top: 0 })
     document.getElementById('main')?.scrollTo({ top: 0 })
@@ -173,7 +202,7 @@ function Shell() {
         </div>
         <main id="main" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           <div key={route} className="mx-auto w-full max-w-[1520px] px-4 py-8 sm:px-6 lg:px-8">
-            {page}
+            <Suspense fallback={<PageLoading />}>{page}</Suspense>
           </div>
         </main>
       </div>
