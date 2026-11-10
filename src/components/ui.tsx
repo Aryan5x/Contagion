@@ -202,10 +202,12 @@ export function SliderField({
   return (
     <div className={cx('py-1', disabled && 'opacity-40')}>
       <div className="flex h-5 items-center justify-between gap-2">
-        <label htmlFor={id} className="flex items-center gap-1.5 text-[13px] text-ink2">
-          {label}
-          {hint && <Info>{hint}</Info>}
-        </label>
+        {/* The help button sits beside the label, not inside it: a label must not contain a button,
+            and the hint text would otherwise become part of the field's accessible name. */}
+        <span className="flex items-center gap-1.5 text-[13px] text-ink2">
+          <label htmlFor={id}>{label}</label>
+          {hint && <Info label={`About ${label}`}>{hint}</Info>}
+        </span>
         <output htmlFor={id} className="tnum font-mono text-[13px] text-ink">
           {format ? format(value) : value}
         </output>
@@ -281,10 +283,10 @@ export function NumberField({
   const id = useId()
   return (
     <div className="flex h-9 items-center justify-between gap-3">
-      <label htmlFor={id} className="flex items-center gap-1.5 text-[13px] text-ink2">
-        {label}
-        {hint && <Info>{hint}</Info>}
-      </label>
+      <span className="flex items-center gap-1.5 text-[13px] text-ink2">
+        <label htmlFor={id}>{label}</label>
+        {hint && <Info label={`About ${label}`}>{hint}</Info>}
+      </span>
       <input
         id={id}
         type="number"
