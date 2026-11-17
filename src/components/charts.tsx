@@ -209,6 +209,12 @@ export function SeriesLegend({ items }: { items: Array<{ label: string }> }) {
 /** Mean attack rate with one-sd whiskers per variant (a comparison of magnitudes: bars). */
 export function AttackBars({ items, height = 240, valueKey = 'attack' }: { items: Array<{ label: string; mean: number; sd: number }>; height?: number; valueKey?: string }) {
   const data = items.map((i) => ({ label: i.label, [valueKey]: Math.round(i.mean * 1000) / 10, err: Math.round(i.sd * 1000) / 10 }))
+  // Tilt the labels when they would collide: many bars, or long labels even with only a few
+  // ("Targeted 20% (top degree)" overlaps its neighbours when written flat).
+  const tilt = items.length > 3 || items.some((i) => i.label.length > 12)
+  // Room for the longest tilted label (about 3.6 px of height per character at -28°).
+  const longest = Math.max(0, ...items.map((i) => i.label.length))
+  const tiltHeight = tilt ? Math.min(140, Math.max(78, 24 + longest * 3.6)) : 30
   return (
     <div style={{ height }} role="img" aria-label="Mean attack rate per scenario with standard deviation">
       <ResponsiveContainer width="100%" height="100%">
@@ -216,8 +222,8 @@ export function AttackBars({ items, height = 240, valueKey = 'attack' }: { items
           <CartesianGrid stroke={COLORS.grid} vertical={false} />
           <XAxis
             dataKey="label"
-            tick={items.length > 3 ? { ...axis, angle: -28, textAnchor: 'end' } : axis}
-            height={items.length > 3 ? 78 : 30}
+            tick={tilt ? { ...axis, angle: -28, textAnchor: 'end' } : axis}
+            height={tiltHeight}
             tickLine={tickLine}
             axisLine={tickLine}
             interval={0}
