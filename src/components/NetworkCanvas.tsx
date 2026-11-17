@@ -329,6 +329,36 @@ export function NetworkCanvas(props: CanvasProps) {
     }
   }, [requestDraw])
 
+  // Wheel zoom. React registers onWheel as a passive listener, so preventDefault()
+  // is ignored there and the page scrolls while the user zooms. Attach a native
+  // non-passive listener instead.
+  useEffect(() => {
+    const cv = canvas.current
+    if (!cv) return
+    const onWheel = (e: WheelEvent) => {
+      if (propsRef.current.interactive === false) return
+      e.preventDefault()
+      const r = cv.getBoundingClientRect()
+      const x = e.clientX - r.left
+      const y = e.clientY - r.top
+      const v = view.current
+      const nz = Math.max(1, Math.min(10, v.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)))
+      const k = nz / v.zoom
+      const { w, h } = size.current
+      // keep the point under the cursor fixed
+      v.px = (x - w / 2) - (x - w / 2 - v.px) * k
+      v.py = (y - h / 2) - (y - h / 2 - v.py) * k
+      v.zoom = nz
+      if (nz === 1) {
+        v.px = 0
+        v.py = 0
+      }
+      requestDraw()
+    }
+    cv.addEventListener('wheel', onWheel, { passive: false })
+    return () => cv.removeEventListener('wheel', onWheel)
+  }, [requestDraw])
+
   const pick = useCallback(
     (cx: number, cy: number): number | null => {
       const g = propsRef.current.graph
@@ -348,7 +378,7 @@ export function NetworkCanvas(props: CanvasProps) {
     [radiusOf, toScreen],
   )
 
-  const local = (e: React.PointerEvent | React.WheelEvent) => {
+  const local = (e: React.PointerEvent) => {
     const r = canvas.current!.getBoundingClientRect()
     return { x: e.clientX - r.left, y: e.clientY - r.top }
   }
@@ -402,23 +432,6 @@ export function NetworkCanvas(props: CanvasProps) {
         onPointerLeave={() => setHover(null)}
         onDoubleClick={() => {
           view.current = { zoom: 1, px: 0, py: 0 }
-          requestDraw()
-        }}
-        onWheel={(e) => {
-          if (!interactive) return
-          const { x, y } = local(e)
-          const v = view.current
-          const nz = Math.max(1, Math.min(10, v.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)))
-          const k = nz / v.zoom
-          const { w, h } = size.current
-          // keep the point under the cursor fixed
-          v.px = (x - w / 2) - (x - w / 2 - v.px) * k
-          v.py = (y - h / 2) - (y - h / 2 - v.py) * k
-          v.zoom = nz
-          if (nz === 1) {
-            v.px = 0
-            v.py = 0
-          }
           requestDraw()
         }}
       />
