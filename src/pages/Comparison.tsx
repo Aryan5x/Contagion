@@ -181,8 +181,8 @@ export function Comparison() {
               <ResultsTable results={ordered} runs={data.runs} n={graph.n} />
               <ExportPanel
                 items={[
-                  { label: 'Results table', title: 'CSV: mean and standard deviation of every statistic per scenario, with the reduction versus the baseline', run: () => downloadText(variantsCSV(ordered), `breaking-the-chain_${configSlug(ordered[0].config)}_comparison_runs${data.runs}.csv`) },
-                  { label: 'Daily curves', title: 'CSV: mean susceptible, infected and removed per day for each scenario', run: () => downloadText(curvesCSV(ordered), `breaking-the-chain_${configSlug(ordered[0].config)}_comparison-curves_runs${data.runs}.csv`) },
+                  { label: 'Results table', title: 'CSV: mean and standard deviation of every statistic per scenario, with the reduction versus the baseline', run: () => downloadText(variantsCSV(ordered), `contagion_${configSlug(ordered[0].config)}_comparison_runs${data.runs}.csv`) },
+                  { label: 'Daily curves', title: 'CSV: mean susceptible, infected and removed per day for each scenario', run: () => downloadText(curvesCSV(ordered), `contagion_${configSlug(ordered[0].config)}_comparison-curves_runs${data.runs}.csv`) },
                 ]}
                 note={stale ? 'These are the results shown above, from before the settings changed. Run the comparison again to export the new settings.' : `${data.runs} runs per scenario on the same network and seed.`}
               />

@@ -133,7 +133,7 @@ function Results({ def, settings, results }: { def: ExperimentDef; settings: Exp
   const text = useMemo(() => def.interpret(results, used), [def, results, used])
   const specs = useMemo(() => def.build(used), [def, used])
 
-  const fileBase = `breaking-the-chain_experiment-${def.id}_n${used.n}_seed${used.seed}_runs${used.runs}`
+  const fileBase = `contagion_experiment-${def.id}_n${used.n}_seed${used.seed}_runs${used.runs}`
   const isSweep = def.xLabel !== undefined
   const curveVariants = isSweep ? [3, 5, 7, 9].map((i) => results[i]).filter(Boolean) : results
 

@@ -119,7 +119,7 @@ function Sidebar({ route, go, onNavigate }: { route: RouteId; go: (r: RouteId) =
     <div className="flex h-full flex-col bg-side">
       <div className="flex h-16 items-center gap-2.5 px-5">
         <Mark />
-        <span className="text-[16px] font-medium tracking-[-0.01em]">Breaking the Chain</span>
+        <span className="text-[16px] font-medium tracking-[-0.01em]">Contagion</span>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pt-2" aria-label="Primary">
         <ul className="space-y-0.5">{NAV.filter((n) => n.group === 'run').map(item)}</ul>
@@ -198,7 +198,7 @@ function Shell() {
             {open ? <X size={18} strokeWidth={1.5} /> : <Menu size={18} strokeWidth={1.5} />}
           </button>
           <Mark />
-          <span className="font-medium">Breaking the Chain</span>
+          <span className="font-medium">Contagion</span>
         </div>
         <main id="main" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           <div key={route} className="mx-auto w-full max-w-[1520px] px-4 py-8 sm:px-6 lg:px-8">
