@@ -250,8 +250,8 @@ export function NetworkExplorer() {
 
           <ExportPanel
             items={[
-              { label: 'Edge list', title: 'CSV: every edge {u, v} of the graph with both degrees', run: () => downloadText(edgeListCSV(graph), `breaking-the-chain_${configSlug(config)}_edges.csv`) },
-              { label: 'Network image', title: `PNG of the network, coloured ${mode === 'degree' ? 'by degree' : 'by component'}`, run: () => downloadCanvasPNG(canvasWrap.current, `breaking-the-chain_${configSlug(config)}_${mode}.png`, COLORS.canvas) },
+              { label: 'Edge list', title: 'CSV: every edge {u, v} of the graph with both degrees', run: () => downloadText(edgeListCSV(graph), `contagion_${configSlug(config)}_edges.csv`) },
+              { label: 'Network image', title: `PNG of the network, coloured ${mode === 'degree' ? 'by degree' : 'by component'}`, run: () => downloadCanvasPNG(canvasWrap.current, `contagion_${configSlug(config)}_${mode}.png`, COLORS.canvas) },
             ]}
             note="The edge list can be loaded into a spreadsheet or a graph tool such as Gephi or NetworkX."
           />

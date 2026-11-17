@@ -1,4 +1,4 @@
-# Breaking the Chain
+# Contagion
 
 Modelling and controlling epidemic spread through graph theory. An interactive simulator for a Discrete Mathematical Structures project: a stochastic SIR epidemic runs on random, small-world and scale-free contact graphs, and vaccination, distancing, isolation and contact tracing are tested on the same network. Results can be exported as CSV and PNG.
 

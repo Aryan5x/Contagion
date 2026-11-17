@@ -27,7 +27,7 @@ export function About() {
       <header className="rise mb-10 max-w-3xl">
         <h1 className="font-serif text-[34px] leading-[1.15] font-normal tracking-[-0.02em]">About the project</h1>
         <p className="mt-2 text-[15px] leading-[22px] text-ink2">
-          Breaking the Chain is a project-based learning piece for Discrete Mathematical Structures. It asks whether graph theory can help us understand, predict and control the spread of an epidemic, and answers by running the mathematics.
+          Contagion is a project-based learning piece for Discrete Mathematical Structures. It asks whether graph theory can help us understand, predict and control the spread of an epidemic, and answers by running the mathematics.
         </p>
       </header>
 

@@ -51,7 +51,7 @@ export function LiveSimulation({ go }: { go: (r: RouteId) => void }) {
     return () => window.removeEventListener('keydown', on)
   })
 
-  const fileBase = `breaking-the-chain_${configSlug(config)}_day${m.day}`
+  const fileBase = `contagion_${configSlug(config)}_day${m.day}`
   const runLabel = w.running ? 'Pause' : m.day === 0 ? 'Start' : 'Resume'
   const net = config.network
   const recent = sim.log.slice(-7).reverse()

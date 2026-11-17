@@ -243,7 +243,7 @@ export function Overview({ go }: { go: (r: RouteId) => void }) {
           ))}
         </ul>
         <p className="mt-6 max-w-3xl text-[13px] leading-5 text-ink3">
-          Breaking the Chain is an educational model for a Discrete Mathematical Structures course. It is not a clinical or epidemiological prediction tool and must not be used for medical or public-health decisions.
+          Contagion is an educational model for a Discrete Mathematical Structures course. It is not a clinical or epidemiological prediction tool and must not be used for medical or public-health decisions.
         </p>
       </section>
     </div>
